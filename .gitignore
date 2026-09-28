@@ -1,0 +1,10 @@
+.env
+*.zip
+*.sql
+.tmp_*/
+vendor/
+node_modules/
+uploads/
+config/database.php
+setup_accounts.php
+docs/*.pdf

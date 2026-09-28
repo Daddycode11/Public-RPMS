@@ -1,0 +1,22 @@
+:root { --brand:#2E7D32!important; --brand-dark:#1b5e20!important; --brand-light:#e8f5e9!important; --green:#2E7D32!important; --gold:#F57C00!important; --cream:#FFF8E7!important; --white:#FFFFFF!important; --ink:#183c20!important; --sidebar-bg:#17431e!important; --sidebar-active-text:#fff!important; --sidebar-active-bg:#2E7D32!important; --sidebar-hover:#245c2b!important; --orange:#F57C00; }
+body { background:var(--cream); }
+.sb-brand img { filter:none!important; opacity:1!important; width:48px; height:48px!important; object-fit:contain; }
+.btn-primary,.btn-submit,.btn-pay { background:#F57C00!important; color:#fff!important; }
+.rpms-panel { background:#fff; padding:22px; border:1px solid #dce8db; border-radius:14px; margin-bottom:20px; }
+.rpms-filters { display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin:16px 0; }
+.rpms-filters label { display:flex; flex-direction:column; gap:5px; }
+.rpms-filters input,.rpms-filters select { padding:9px; border:1px solid #bbcdbb; border-radius:7px; }
+.rpms-table-wrap { overflow:auto; }
+.rpms-table { width:100%; border-collapse:collapse; }
+.rpms-table th,.rpms-table td { padding:12px; border-bottom:1px solid #e2e9df; text-align:left; }
+.rpms-table th { background:#e8f5e9; }
+.rpms-button { display:inline-block; padding:8px 13px; background:#2E7D32; color:#fff; border:0; border-radius:7px; cursor:pointer; text-decoration:none; }
+.rpms-button.danger { background:#a22; }
+.rpms-pagination { display:flex; gap:10px; align-items:center; margin:16px 0; flex-wrap:wrap; }
+@media(max-width:760px) { .rpms-main { padding:16px!important; } .rpms-filters>* { max-width:100%; } }
+@media print { .rpms-sidebar,.rpms-topbar,.no-print,.rpms-filters,.rpms-pagination { display:none!important; } .rpms-main { margin:0!important; padding:0!important; } }
+
+.market-logo { display:inline-block; flex-shrink:0; width:64px; height:64px; background:url(../images/logo.png) left center / auto 64px no-repeat; }
+.market-brand { display:flex; gap:14px; align-items:center; color:#fff; font:700 32px Inter,Arial,sans-serif; }
+
+@media print { .receipt-panel { max-width:80mm; margin:auto; border:0; padding:4mm; font:12px Arial,sans-serif; } .receipt-panel th,.receipt-panel td { padding:5px 0; } }

@@ -1,0 +1,3 @@
+<FilesMatch "(^\.|\.(sql|zip|md|log)$)">
+    Require all denied
+</FilesMatch>
