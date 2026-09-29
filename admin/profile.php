@@ -34,7 +34,7 @@ if (isset($_POST['update_profile'])) {
     $first_name = trim($_POST['first_name']);
     $last_name = trim($_POST['last_name']);
     $email = trim($_POST['email']);
-    $twoFA = isset($_POST['enable_2fa']) ? 1 : 0;
+    $twoFA = 1; // Email OTP is required for every administrator login.
 
     $imageName = $admin['image'];
 
@@ -299,7 +299,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(
       <div class="profile-email"><?= htmlspecialchars($admin['email']) ?></div>
       <div class="profile-tags">
         <span class="profile-tag role">Administrator</span>
-        <span class="profile-tag info">2FA <?= $admin['two_factor_enabled'] ? 'Enabled' : 'Disabled' ?></span>
+        <span class="profile-tag info">2FA Required</span>
         <span class="profile-tag info">Since <?= date('M Y', strtotime($admin['created_at'] ?? 'now')) ?></span>
       </div>
     </div>
@@ -349,12 +349,12 @@ body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(
           <!-- 2FA Toggle -->
           <div class="toggle-wrap">
             <label class="toggle-switch">
-              <input type="checkbox" name="enable_2fa" <?= $admin['two_factor_enabled'] ? 'checked' : '' ?>>
+              <input type="checkbox" name="enable_2fa" checked disabled>
               <span class="toggle-slider"></span>
             </label>
             <div>
               <div class="toggle-label">Two-Factor Authentication</div>
-              <div class="toggle-sub">Require OTP via email on each login</div>
+              <div class="toggle-sub">Email OTP is required on every administrator login.</div>
             </div>
           </div>
 

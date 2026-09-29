@@ -9,7 +9,7 @@ $q->execute([$_SESSION['user_id']??0]); $user=$q->fetch(PDO::FETCH_ASSOC);
 if (!$user || $user['role']!=='admin' || $user['status']!=='active' || $user['deleted_at'] || (int)$user['auth_version']!==(int)($_SESSION['auth_version']??1)) {
     header('Location: login.php?role=admin'); exit;
 }
-if (!$user['two_factor_enabled'] || !empty($_SESSION['otp_verified'])) {
+if (!empty($_SESSION['otp_verified'])) {
     $_SESSION['otp_verified']=true; header('Location: ../admin/dashboard.php'); exit;
 }
 $error=''; $info=''; $otp_success=false;

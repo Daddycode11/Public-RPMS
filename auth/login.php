@@ -56,14 +56,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         foreach ($attemptKeys as $key) $pdo->prepare('DELETE FROM login_attempts WHERE attempt_key=?')->execute([$key]);
         session_regenerate_id(true);
-        $_SESSION['otp_verified'] = !$user['two_factor_enabled'];
+        $_SESSION['otp_verified'] = $user['role'] !== 'admin';
         $_SESSION['auth_version'] = (int)$user['auth_version'];
         $_SESSION['user_id']    = $user['id'];
         $_SESSION['role']       = $user['role'];
         $_SESSION['first_name'] = $user['first_name'];
         $_SESSION['last_name']  = $user['last_name'] ?? '';
 
-        if ($user['role'] === 'admin' && $user['two_factor_enabled']) {
+        if ($user['role'] === 'admin') {
             $otp = random_int(100000, 999999);
             $_SESSION['otp_sent_at']=time();
             $expires = date('Y-m-d H:i:s', strtotime('+5 minutes'));

@@ -32,7 +32,7 @@ function requireRole(PDO $pdo, string $role): array {
         http_response_code(403);
         exit('Access denied. Sign in with an approved, active account.');
     }
-    if ($role === 'admin' && $user['two_factor_enabled'] && empty($_SESSION['otp_verified'])) {
+    if ($role === 'admin' && empty($_SESSION['otp_verified'])) {
         header('Location: ../auth/otp_verify.php'); exit;
     }
     return $user;
