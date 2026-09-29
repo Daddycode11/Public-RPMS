@@ -29,6 +29,11 @@ if ($search!=='') { $where[]="(v.vendor_name LIKE ? OR CONCAT_WS(' ',u.first_nam
 $q=$pdo->prepare("SELECT p.*,COALESCE(NULLIF(v.vendor_name,''),NULLIF(TRIM(CONCAT_WS(' ',u.first_name,u.last_name)),''),u.fullname) AS vendor_name,v.stall_number,s.section_name,CONCAT_WS(' ',c.first_name,c.last_name) AS collector_name,(p.amount_paid-COALESCE(p.discount,0)+COALESCE(p.penalty,0)) AS net FROM payments p JOIN vendors v ON v.id=p.vendor_id JOIN users u ON u.id=v.user_id LEFT JOIN users c ON c.id=p.collector_id LEFT JOIN sections s ON s.id=v.section_id WHERE ".implode(' AND ',$where).' ORDER BY p.payment_date DESC,p.id DESC');
 $q->execute($params); $rows=$q->fetchAll(PDO::FETCH_ASSOC);
 $format=$_GET['format']??'';
+if ($format==='xlsx' && $role!=='vendor') {
+    require_once __DIR__.'/spreadsheet_export.php';
+    $exportRows=array_map(static fn($r)=>[(int)$r['id'],$r['payment_date'],$r['vendor_name'],$r['stall_number'],$r['section_name'],$r['collector_name'],$r['payment_type'],(float)$r['amount_paid'],(float)$r['discount'],(float)$r['penalty'],(float)$r['net'],$r['status']],$rows);
+    exportWorkbook(['ID','Date','Vendor','Stall','Section','Collector','Type','Base amount','Discount','Penalty','Net','Status'],$exportRows,'rpms-payments');
+}
 if ($format==='csv' && $role!=='vendor') {
     header('Content-Type: text/csv; charset=UTF-8'); header('Content-Disposition: attachment; filename="rpms-payments.csv"');
     $out=fopen('php://output','w'); fwrite($out,"\xEF\xBB\xBF");
@@ -49,7 +54,16 @@ echo '<p role="status">'.h($message).'</p>';
 <label>Group summary<select name="group_by"><?php foreach(['none','vendor','collector'] as $g): ?><option <?= $g===$group?'selected':'' ?>><?= $g ?></option><?php endforeach ?></select></label><?php if($vendor): ?><input type="hidden" name="vendor_id" value="<?= $vendor ?>"><?php endif ?><button class="rpms-button">Apply filters</button></form>
 <?php $settled=array_filter($rows,fn($r)=>$r['status']==='paid'); ?>
 <section class="rpms-panel"><strong><?= count($rows) ?> records</strong> · Paid base: ₱<?= number_format(array_sum(array_column($settled,'amount_paid')),2) ?> · Discount: ₱<?= number_format(array_sum(array_column($settled,'discount')),2) ?> · Penalty: ₱<?= number_format(array_sum(array_column($settled,'penalty')),2) ?> · Net collected: <strong>₱<?= number_format(array_sum(array_column($settled,'net')),2) ?></strong></section>
-<?php if ($role!=='vendor'): ?><p class="no-print"><a class="rpms-button" href="?<?= h(http_build_query(array_merge($_GET,['format'=>'csv']))) ?>">Export Excel (CSV)</a> <a class="rpms-button" href="?<?= h(http_build_query(array_merge($_GET,['format'=>'html_pdf']))) ?>">View PDF / Print preview</a><?php if ($preview): ?> <button class="rpms-button" onclick="window.print()">Print / Save as PDF</button><?php endif ?></p><?php endif ?>
+<?php if($role==='admin' && basename($_SERVER['SCRIPT_NAME'])==='reports.php' && !$preview):
+$trend=[]; foreach($settled as $r) $trend[$r['payment_date']]=($trend[$r['payment_date']]??0)+(float)$r['net']; ksort($trend); ?>
+<section class="rpms-panel no-print"><h2>Collection Trend</h2><div style="height:240px"><canvas id="reportTrend" aria-label="Daily net collections for the selected date range" role="img"></canvas></div><p id="reportTrendFallback" hidden>Chart unavailable. The payment table contains the same filtered records.</p></section>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+if(typeof Chart!=='undefined') new Chart(document.getElementById('reportTrend'),{type:'line',data:{labels:<?= json_encode(array_keys($trend)) ?>,datasets:[{label:'Net collected',data:<?= json_encode(array_values($trend)) ?>,borderColor:'#2E7D32',backgroundColor:'#e8f5e9',fill:true,tension:.2}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{display:false}}}});
+else document.getElementById('reportTrendFallback').hidden=false;
+</script>
+<?php endif ?>
+<?php if ($role!=='vendor'): ?><p class="no-print"><a class="rpms-button" href="?<?= h(http_build_query(array_merge($_GET,['format'=>'xlsx']))) ?>">Export Excel</a> <a class="rpms-button" href="?<?= h(http_build_query(array_merge($_GET,['format'=>'csv']))) ?>">Download CSV</a> <a class="rpms-button" href="?<?= h(http_build_query(array_merge($_GET,['format'=>'html_pdf']))) ?>">View PDF / Print preview</a><?php if ($preview): ?> <button class="rpms-button" onclick="window.print()">Print / Save as PDF</button><?php endif ?></p><?php endif ?>
 <?php if (in_array($group,['vendor','collector'],true)):
 $groups=[]; foreach($settled as $r) { $key=$r[$group.'_id']; if(!isset($groups[$key])) $groups[$key]=['name'=>$r[$group.'_name'],'count'=>0,'net'=>0]; $groups[$key]['count']++; $groups[$key]['net']+=(float)$r['net']; } ?>
 <section class="rpms-panel"><h2><?= h(ucfirst($group)) ?> totals</h2><table class="rpms-table"><tr><th>Name</th><th>Transactions</th><th>Net collected</th></tr><?php foreach($groups as $g): ?><tr><td><?= h($g['name']) ?></td><td><?= $g['count'] ?></td><td>₱<?= number_format($g['net'],2) ?></td></tr><?php endforeach ?></table></section><?php endif ?>

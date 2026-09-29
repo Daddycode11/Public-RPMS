@@ -1,11 +1,12 @@
 """Run only against the synthetic rpms_revision_test database on port 8098."""
 import http.cookiejar
 import re
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
 
-BASE = 'http://127.0.0.1:8098/'
+BASE = os.environ.get('RPMS_TEST_URL', 'http://127.0.0.1:8099/')
 PASSWORD = 'Revision-Test-Password-2026!'
 
 def client():

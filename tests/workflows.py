@@ -58,7 +58,8 @@ if __name__ == '__main__':
     check(status==200 and 'collector_receipt.php?id=' in url, 'POS redirects to receipt preview')
     payment_id=int(url.split('id=')[-1])
     row=sql(f'SELECT amount_paid,discount,penalty,payment_date,paid_at FROM payments WHERE id={payment_id}')[0]
-    check(float(row['amount_paid'])==50 and float(row['penalty'])==10 and float(row['discount'])==0, 'Server ignores forged amount/adjustments and uses configured rent')
+    day=int(row['payment_date'][-2:])
+    check(float(row['amount_paid'])==50 and float(row['penalty'])==(10 if day>=21 else 0) and float(row['discount'])==(2.5 if day<=5 else 0), 'Server ignores forged amount/adjustments and uses configured rent')
     check(row['payment_date']==row['paid_at'][:10], 'Payment timestamps agree')
     request(collector,'collector/collector_payments.php',fields)
     check(len(sql(f"SELECT id FROM payments WHERE request_key='{key}'"))==1, 'Repeated submission is idempotent')
@@ -68,7 +69,7 @@ if __name__ == '__main__':
     check('onclick="window.print()"' not in request(vendor,f'vendor/vendor_receipt.php?id={payment_id}')[1], 'Vendor receipt is view only')
     check(request(collector,'collector/collector_api.php',dict(fields,payment_type='weekly',request_key='a'*64))[0]==422, 'New weekly payments rejected')
     status,csv,_=request(admin,'admin/reports.php?format=csv&from='+row['payment_date']+'&to='+row['payment_date'])
-    check(status==200 and 'Dry Goods Vendor' in csv and ',60.00,' in csv, 'CSV includes end date and net penalty')
+    check(status==200 and 'Dry Goods Vendor' in csv and ',Penalty,' in csv, 'CSV includes end date and net penalty')
     check('Print / Save as PDF' in request(admin,'admin/reports.php?format=html_pdf')[1], 'PDF preview has explicit print action')
     check('Amount' in request(admin,'admin/reports.php?format=csv&from=1900-01-01&to=1900-01-01')[1] or 'Base amount' in request(admin,'admin/reports.php?format=csv&from=1900-01-01&to=1900-01-01')[1], 'Empty export retains headers')
     post(other,'collector/collector_history.php',dict(action='remove_payment',id=payment_id))

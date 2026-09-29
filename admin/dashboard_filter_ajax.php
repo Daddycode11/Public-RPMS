@@ -31,10 +31,10 @@ try {
 
     // Monthly data
     $stmt = $pdo->prepare("
-        SELECT DATE_FORMAT(p.paid_at,'%b') AS month,
+        SELECT DATE_FORMAT(p.paid_at,'%b %Y') AS month,
                SUM(p.amount_paid - COALESCE(p.discount,0) + COALESCE(p.penalty,0)) AS total
         FROM payments p WHERE p.deleted_at IS NULL AND p.status='paid' $where
-        GROUP BY MONTH(p.paid_at) ORDER BY MONTH(p.paid_at)
+        GROUP BY YEAR(p.paid_at),MONTH(p.paid_at) ORDER BY YEAR(p.paid_at),MONTH(p.paid_at)
     ");
     $stmt->execute($params);
     $monthlyData = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -42,7 +42,7 @@ try {
     // Recent payments
     $stmt = $pdo->prepare("
         SELECT p.id,p.payment_date, CONCAT(u.first_name,' ',u.last_name) AS vendor,
-               p.amount_paid, COALESCE(p.status,'paid') AS status
+               (p.amount_paid-COALESCE(p.discount,0)+COALESCE(p.penalty,0)) AS amount_paid, COALESCE(p.status,'paid') AS status
         FROM payments p
         JOIN vendors v ON v.id = p.vendor_id
         JOIN users u ON u.id = v.user_id

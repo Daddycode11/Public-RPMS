@@ -29,7 +29,7 @@ function uploadImage($file, $prefix) {
     if (!in_array($ext, $allowed)) return null;
 
     $newName = uniqid($prefix.'_'.time().'_', true) . '.' . $ext;
-    $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/rpms-system/uploads/settings/';
+    $uploadDir = dirname(__DIR__) . '/uploads/settings/';
     if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
 
     if (move_uploaded_file($file['tmp_name'], $uploadDir . $newName)) return $newName;
@@ -256,7 +256,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
       <div class="card-body">
         <div class="upload-area">
           <?php if (!empty($settings['logo'])): ?>
-            <img src="/rpms-system/uploads/settings/<?= $settings['logo'] ?>" class="upload-preview" id="logoPreview">
+            <img src="../uploads/settings/<?= $settings['logo'] ?>" class="upload-preview" id="logoPreview">
           <?php else: ?>
             <img src="" class="upload-preview" id="logoPreview" style="display:none;">
           <?php endif; ?>
@@ -275,7 +275,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
       <div class="card-body">
         <div class="upload-area">
           <?php if (!empty($settings['favicon'])): ?>
-            <img src="/rpms-system/uploads/settings/<?= $settings['favicon'] ?>" class="upload-preview" id="faviconPreview">
+            <img src="../uploads/settings/<?= $settings['favicon'] ?>" class="upload-preview" id="faviconPreview">
           <?php else: ?>
             <img src="" class="upload-preview" id="faviconPreview" style="display:none;">
           <?php endif; ?>
@@ -294,7 +294,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
       <div class="card-body">
         <div class="upload-area">
           <?php if (!empty($settings['homepage_image'])): ?>
-            <img src="/rpms-system/uploads/settings/<?= $settings['homepage_image'] ?>" class="upload-preview" id="homepagePreview" style="max-height:120px;">
+            <img src="../uploads/settings/<?= $settings['homepage_image'] ?>" class="upload-preview" id="homepagePreview" style="max-height:120px;">
           <?php else: ?>
             <img src="" class="upload-preview" id="homepagePreview" style="display:none;">
           <?php endif; ?>

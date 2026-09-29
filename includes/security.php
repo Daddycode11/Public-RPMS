@@ -1,5 +1,9 @@
 <?php
-if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    ini_set('session.use_strict_mode','1');
+    session_set_cookie_params(['httponly'=>true,'samesite'=>'Lax','secure'=>!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off']);
+    session_start();
+}
 date_default_timezone_set('Asia/Manila');
 foreach (array_merge($_GET, $_POST) as $input) {
     if (!is_scalar($input) && $input !== null) { http_response_code(400); exit('Invalid form field.'); }
@@ -36,12 +40,15 @@ function requireRole(PDO $pdo, string $role): array {
 
 // Add tokens to legacy forms while they are progressively maintained.
 function secureHtml(string $html): string {
+    foreach(headers_list() as $header) {
+        if(stripos($header,'Content-Type:')===0 && stripos($header,'text/html')===false) return $html;
+    }
     if (stripos($html, '<html') === false) return $html;
     $html = preg_replace_callback('/<form\b[^>]*>/i', static function ($match) {
         return preg_match('/method\s*=\s*["\x27]?post\b/i', $match[0]) ? $match[0] . csrfField() : $match[0];
     }, $html);
     $base = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
-    if (preg_match('~/(admin|collector|vendor|auth)$~', $base)) $base = dirname($base);
+    $base = preg_replace('~/(admin|collector|vendor|auth)$~', '', $base);
     $assets = rtrim($base, '/') . '/assets';
     $tags = '<meta name="csrf-token" content="' . h(csrfToken()) . '"><link rel="stylesheet" href="' . h($assets) . '/css/revisions.css">';
     $tags .= '<script src="' . h($assets) . '/js/revisions.js" defer></script>';

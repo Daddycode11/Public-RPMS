@@ -9,7 +9,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'collector') {
     exit;
 }
 
-$collector_id = $_SESSION['user_id'];
+$collector_id = (int)$_SESSION['user_id'];
 
 /* ===================== DATE FILTER ===================== */
 $from = $_GET['from'] ?? date('Y-m-01');
@@ -36,9 +36,9 @@ $totalPages    = ceil($totalPayments / $limit);
 
 /* ===================== PAGINATED PAYMENTS ===================== */
 $paymentsStmt = $pdo->prepare("
-    SELECT p.*, v.vendor_name, v.stall_number
+    SELECT p.*, COALESCE(NULLIF(v.vendor_name,''),NULLIF(TRIM(CONCAT_WS(' ',vu.first_name,vu.last_name)),''),vu.fullname) AS vendor_name, v.stall_number
     FROM payments p
-    LEFT JOIN vendors v ON v.id = p.vendor_id
+    LEFT JOIN vendors v ON v.id = p.vendor_id LEFT JOIN users vu ON vu.id=v.user_id
     WHERE p.deleted_at IS NULL AND p.status='paid' AND p.collector_id = :cid
       AND DATE(p.paid_at) BETWEEN :from AND :to
     ORDER BY p.paid_at DESC
@@ -58,13 +58,13 @@ $total_collected = array_sum(array_map(fn($p) =>
 
 /* ===================== BEST VENDOR ===================== */
 $bestVendor = $pdo->query("
-    SELECT CONCAT(u.first_name,' ',u.last_name) AS name,
+    SELECT COALESCE(NULLIF(v.vendor_name,''),NULLIF(TRIM(CONCAT_WS(' ',u.first_name,u.last_name)),''),u.fullname) AS name,
            SUM(p.amount_paid - COALESCE(p.discount,0) + COALESCE(p.penalty,0)) AS total,
            AVG(p.amount_paid - COALESCE(p.discount,0) + COALESCE(p.penalty,0)) AS avg_daily
     FROM payments p
     JOIN vendors v ON v.id = p.vendor_id
     JOIN users u ON u.id = v.user_id
-    WHERE p.status = 'paid' AND p.deleted_at IS NULL
+    WHERE p.status = 'paid' AND p.deleted_at IS NULL AND p.collector_id=$collector_id
     GROUP BY v.id
     ORDER BY total DESC
     LIMIT 1
@@ -72,16 +72,16 @@ $bestVendor = $pdo->query("
 
 /* ===================== VENDOR STATUS ===================== */
 $vendorStatus = $pdo->query("
-    SELECT SUM(status='active') AS active,
-           SUM(status='inactive') AS inactive,
-           SUM(status='overdue') AS overdue
-    FROM vendors
+    SELECT COALESCE(SUM(status<>'inactive' AND (balance<=0 OR next_due_date IS NULL OR next_due_date>=CURDATE())),0) AS active,
+           COALESCE(SUM(status='inactive'),0) AS inactive,
+           COALESCE(SUM(status<>'inactive' AND balance>0 AND next_due_date<CURDATE()),0) AS overdue
+    FROM vendors WHERE deleted_at IS NULL
 ")->fetch(PDO::FETCH_ASSOC);
 
 /* ===================== VENDOR RANKINGS ===================== */
 $vendorRankingStmt = $pdo->prepare("
     SELECT v.id, v.stall_number, s.section_name,
-           CONCAT(u.first_name,' ',u.last_name) AS name,
+           COALESCE(NULLIF(v.vendor_name,''),NULLIF(TRIM(CONCAT_WS(' ',u.first_name,u.last_name)),''),u.fullname) AS name,
            COUNT(p.id) AS transactions,
            COALESCE(SUM(p.amount_paid - COALESCE(p.discount,0) + COALESCE(p.penalty,0)),0) AS total_collected
     FROM vendors v
@@ -100,6 +100,8 @@ $rankCount=count($rankings); $rankPage=max(1,min(max(1,(int)ceil($rankCount/20))
 $rankings=array_slice($rankings,($rankPage-1)*20,20);
 $totalQuery=$pdo->prepare("SELECT COALESCE(SUM(amount_paid-COALESCE(discount,0)+COALESCE(penalty,0)),0) FROM payments WHERE collector_id=? AND deleted_at IS NULL AND status='paid' AND DATE(paid_at) BETWEEN ? AND ?");
 $totalQuery->execute([$collector_id,$from,$to]); $total_collected=(float)$totalQuery->fetchColumn();
+$dailyAverage=$pdo->prepare("SELECT COALESCE(AVG(day_total),0) FROM (SELECT SUM(amount_paid-COALESCE(discount,0)+COALESCE(penalty,0)) AS day_total FROM payments WHERE collector_id=? AND deleted_at IS NULL AND status='paid' AND payment_date BETWEEN ? AND ? GROUP BY payment_date) daily");
+$dailyAverage->execute([$collector_id,$from,$to]); $averageDaily=(float)$dailyAverage->fetchColumn();
 
 ?>
 <!DOCTYPE html>
@@ -123,7 +125,7 @@ $totalQuery->execute([$collector_id,$from,$to]); $total_collected=(float)$totalQ
 ============================================================ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --brand:       #ea580c;
+  --brand:       #F57C00;
   --brand-dark:  #b3260c;
   --brand-light: #ffe4d1;
   --brand-glow:  rgba(234,88,12,.14);
@@ -403,7 +405,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
       <div class="card-body" style="display:flex;flex-direction:column;align-items:center;">
         <div style="max-width:180px;width:100%;"><canvas id="vendorChart"></canvas></div>
         <div class="donut-legend">
-          <div class="dl-item"><span style="display:flex;align-items:center;"><span class="dl-dot" style="background:#ea580c"></span>Active</span><strong><?= $vendorStatus['active'] ?></strong></div>
+          <div class="dl-item"><span style="display:flex;align-items:center;"><span class="dl-dot" style="background:#F57C00"></span>Active</span><strong><?= $vendorStatus['active'] ?></strong></div>
           <div class="dl-item"><span style="display:flex;align-items:center;"><span class="dl-dot" style="background:#6b8878"></span>Inactive</span><strong><?= $vendorStatus['inactive'] ?></strong></div>
           <div class="dl-item"><span style="display:flex;align-items:center;"><span class="dl-dot" style="background:#fb7185"></span>Overdue</span><strong><?= $vendorStatus['overdue'] ?></strong></div>
         </div>
@@ -476,7 +478,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
     <div class="card-header">
       <span class="card-title">Vendor Performance Ranking</span>
 <form method="get" class="rpms-filters"><input type="hidden" name="from" value="<?= h($from) ?>"><input type="hidden" name="to" value="<?= h($to) ?>"><input name="rank_search" value="<?= h($rankSearch) ?>" placeholder="Vendor, stall, section"><button>Search</button></form>
-<nav>Page <?= $rankPage ?> of <?= max(1,(int)ceil($rankCount/20)) ?> ? <a href="?<?= h(http_build_query(array_merge($_GET,['rank_page'=>max(1,$rankPage-1)]))) ?>">Previous</a> ? <a href="?<?= h(http_build_query(array_merge($_GET,['rank_page'=>min(max(1,(int)ceil($rankCount/20)),$rankPage+1)]))) ?>">Next</a></nav>
+<nav>Page <?= $rankPage ?> of <?= max(1,(int)ceil($rankCount/20)) ?> &middot; <a href="?<?= h(http_build_query(array_merge($_GET,['rank_page'=>max(1,$rankPage-1)]))) ?>">Previous</a> ? <a href="?<?= h(http_build_query(array_merge($_GET,['rank_page'=>min(max(1,(int)ceil($rankCount/20)),$rankPage+1)]))) ?>">Next</a></nav>
       <span style="font-size:.82rem;color:var(--ink-3)"><?= htmlspecialchars($from) ?> → <?= htmlspecialchars($to) ?></span>
     </div>
     <div style="overflow-x:auto;">
@@ -527,10 +529,10 @@ $(document).ready(function () {
       datasets: [{
         label: 'Net Collected (₱)',
         data: <?= json_encode(array_map(fn($p) => ($p['amount_paid'] - $p['discount'] + $p['penalty']), $payments)) ?>,
-        borderColor: '#ea580c',
+        borderColor: '#F57C00',
         backgroundColor: 'rgba(234,88,12,.08)',
         borderWidth: 2.5, fill: true, tension: 0.4,
-        pointRadius: 4, pointBackgroundColor: '#ea580c',
+        pointRadius: 4, pointBackgroundColor: '#F57C00',
         pointBorderColor: '#fff', pointBorderWidth: 2,
       }]
     },
@@ -550,7 +552,7 @@ $(document).ready(function () {
       labels: ['Active', 'Inactive', 'Overdue'],
       datasets: [{
         data: [<?= $vendorStatus['active'] ?>, <?= $vendorStatus['inactive'] ?>, <?= $vendorStatus['overdue'] ?>],
-        backgroundColor: ['#ea580c', '#6b8878', '#fb7185'],
+        backgroundColor: ['#F57C00', '#6b8878', '#fb7185'],
         borderWidth: 0, hoverOffset: 6
       }]
     },

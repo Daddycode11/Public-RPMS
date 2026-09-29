@@ -15,10 +15,10 @@ if (isset($_GET['code']) && trim($_GET['code']) !== '') {
     $searched = true;
     $code = trim($_GET['code']);
     $stmt = $pdo->prepare("
-        SELECT p.*, v.vendor_name, v.stall_number,
+        SELECT p.*, COALESCE(NULLIF(v.vendor_name,''),NULLIF(TRIM(CONCAT_WS(' ',vu.first_name,vu.last_name)),''),vu.fullname) AS vendor_name, v.stall_number,
                CONCAT(u.first_name,' ',u.last_name) AS collector_name
         FROM payments p
-        JOIN vendors v ON v.id = p.vendor_id
+        JOIN vendors v ON v.id = p.vendor_id LEFT JOIN users vu ON vu.id=v.user_id
         LEFT JOIN users u ON u.id = p.collector_id
         WHERE p.id = ?
         LIMIT 1
@@ -277,7 +277,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
             <div class="detail-grid">
               <div class="detail-item">
                 <div class="detail-label">Amount Paid</div>
-                <div class="detail-val big">₱<?= number_format($result['amount_paid'], 2) ?></div>
+                <div class="detail-val big">₱<?= number_format($result['amount_paid']-($result['discount']??0)+($result['penalty']??0), 2) ?></div>
               </div>
               <div class="detail-item">
                 <div class="detail-label">Status</div>

@@ -22,7 +22,7 @@ function uploadSectionImage($file) {
     if (!in_array($ext, $allowed)) return null;
 
     $newName = uniqid('section_', true) . '.' . $ext;
-    $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/rpms-system/uploads/sections/';
+    $uploadDir = dirname(__DIR__) . '/uploads/sections/';
     if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
 
     if (move_uploaded_file($file['tmp_name'], $uploadDir . $newName)) return $newName;
@@ -317,7 +317,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
         <?php foreach ($sections as $s): ?>
         <div class="section-card" data-id="<?= $s['id'] ?>" data-name="<?= htmlspecialchars(strtolower($s['section_name'])) ?>" data-date="<?= $s['id'] ?>">
           <?php if ($s['image']): ?>
-            <img src="/rpms-system/uploads/sections/<?= $s['image'] ?>" class="section-img" alt="">
+            <img src="../uploads/sections/<?= $s['image'] ?>" class="section-img" alt="">
           <?php else: ?>
             <div class="section-img-placeholder">No Image</div>
           <?php endif; ?>
@@ -333,7 +333,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
               data-id="<?= $s['id'] ?>"
               data-name="<?= htmlspecialchars($s['section_name']) ?>"
               data-desc="<?= htmlspecialchars($s['description']) ?>"
-              data-img="<?= $s['image'] ? '/rpms-system/uploads/sections/'.$s['image'] : '' ?>">Edit</button>
+              data-img="<?= $s['image'] ? '../uploads/sections/'.$s['image'] : '' ?>">Edit</button>
             <button class="btn btn-del btn-sm archiveBtn" data-id="<?= $s['id'] ?>" data-name="<?= htmlspecialchars($s['section_name']) ?>">Archive</button>
           </div>
         </div>
@@ -352,7 +352,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
         <?php foreach ($archivedSections as $s): ?>
         <div class="section-card archived" data-id="<?= $s['id'] ?>" data-name="<?= htmlspecialchars(strtolower($s['section_name'])) ?>" data-date="<?= $s['id'] ?>">
           <?php if ($s['image']): ?>
-            <img src="/rpms-system/uploads/sections/<?= $s['image'] ?>" class="section-img" alt="">
+            <img src="../uploads/sections/<?= $s['image'] ?>" class="section-img" alt="">
           <?php else: ?>
             <div class="section-img-placeholder">No Image</div>
           <?php endif; ?>

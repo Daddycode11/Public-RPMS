@@ -12,14 +12,15 @@ require_once __DIR__ . '/../vendor/autoload.php';
 function sendRpmsMail(string $toEmail, string $toName, string $subject, string $htmlBody, string $plainBody = ''): array
 {
     if (getenv('RPMS_MAIL_ENABLED') === '0') return ['success'=>false,'message'=>'Email delivery is disabled.'];
+    $localMail = is_file(__DIR__ . '/../config/smtp.local.php') ? require __DIR__ . '/../config/smtp.local.php' : [];
     $mail = new PHPMailer(true);
     $mail->Timeout = 10;
     try {
         $mail->isSMTP();
         $mail->Host       = getenv('RPMS_SMTP_HOST') ?: 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
-        $mail->Username   = getenv('RPMS_SMTP_USER') ?: 'eutech253@gmail.com';
-        $mail->Password   = getenv('RPMS_SMTP_PASSWORD') ?: 'zryiwafboroqoknh';
+        $mail->Username   = getenv('RPMS_SMTP_USER') ?: ($localMail['Username'] ?? '');
+        $mail->Password   = getenv('RPMS_SMTP_PASSWORD') ?: ($localMail['Password'] ?? '');
         $mail->SMTPSecure = 'tls';
         $mail->Port       = 587;
 

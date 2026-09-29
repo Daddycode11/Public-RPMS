@@ -1,5 +1,7 @@
 :root { --brand:#2E7D32!important; --brand-dark:#1b5e20!important; --brand-light:#e8f5e9!important; --green:#2E7D32!important; --gold:#F57C00!important; --cream:#FFF8E7!important; --white:#FFFFFF!important; --ink:#183c20!important; --sidebar-bg:#17431e!important; --sidebar-active-text:#fff!important; --sidebar-active-bg:#2E7D32!important; --sidebar-hover:#245c2b!important; --orange:#F57C00; }
-body { background:var(--cream); }
+body { background:var(--cream)!important; }
+.header-actions,.header-actions>div { flex-wrap:wrap; max-width:100%; }
+.rpms-panel,.card { min-width:0; }
 .sb-brand img { filter:none!important; opacity:1!important; width:48px; height:48px!important; object-fit:contain; }
 .btn-primary,.btn-submit,.btn-pay { background:#F57C00!important; color:#fff!important; }
 .rpms-panel { background:#fff; padding:22px; border:1px solid #dce8db; border-radius:14px; margin-bottom:20px; }

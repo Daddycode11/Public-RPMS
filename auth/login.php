@@ -1,6 +1,6 @@
 <?php
 require_once '../config/database.php';
-if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+require_once __DIR__.'/../includes/security.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -65,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user['role'] === 'admin' && $user['two_factor_enabled']) {
             $otp = random_int(100000, 999999);
+            $_SESSION['otp_sent_at']=time();
             $expires = date('Y-m-d H:i:s', strtotime('+5 minutes'));
             $stmt = $pdo->prepare("UPDATE users SET otp_code=?, otp_expires=? WHERE id=?");
             $stmt->execute([$otp, $expires, $user['id']]);

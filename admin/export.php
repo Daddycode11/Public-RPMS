@@ -16,36 +16,16 @@ if (isset($_GET['export'])) {
     $filename = '';
 
     switch ($type) {
-        case 'payments':
-            $sql = "SELECT p.id, v.stall_number, CONCAT(u.first_name,' ',u.last_name) AS vendor_name,
-                           p.amount_paid, p.discount, p.penalty, p.payment_date, p.status,
-                           CONCAT(c.first_name,' ',c.last_name) AS collector_name
-                    FROM payments p
-                    JOIN vendors v ON v.id = p.vendor_id
-                    JOIN users u ON u.id = v.user_id
-                    LEFT JOIN users c ON c.id = p.collector_id
-                    WHERE p.deleted_at IS NULL";
-            $params = [];
-            if ($dateFrom) { $sql .= " AND p.payment_date >= ?"; $params[] = $dateFrom; }
-            if ($dateTo) { $sql .= " AND p.payment_date <= ?"; $params[] = $dateTo; }
-            $sql .= " ORDER BY p.payment_date DESC";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($params);
-            $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $headers = ['ID', 'Stall', 'Vendor', 'Amount', 'Discount', 'Penalty', 'Date', 'Status', 'Collector'];
-            $filename = 'payments_export';
-            break;
-
         case 'vendors':
             $data = $pdo->query("
                 SELECT v.id, v.stall_number, CONCAT(u.first_name,' ',u.last_name) AS vendor_name,
-                       u.email, v.monthly_rent, v.balance, v.status, s.section_name, v.next_due_date
+                       u.email, v.monthly_rent, v.daily_rent, v.balance, v.status, s.section_name, v.next_due_date
                 FROM vendors v
                 JOIN users u ON u.id = v.user_id
                 LEFT JOIN sections s ON s.id = v.section_id
                 WHERE v.deleted_at IS NULL ORDER BY v.stall_number
             ")->fetchAll(PDO::FETCH_ASSOC);
-            $headers = ['ID', 'Stall', 'Name', 'Email', 'Monthly Rent', 'Balance', 'Status', 'Section', 'Next Due Date'];
+            $headers = ['ID', 'Stall', 'Name', 'Email', 'Monthly Rent', 'Daily Rent', 'Balance', 'Status', 'Section', 'Next Due Date'];
             $filename = 'vendors_export';
             break;
 
@@ -54,7 +34,7 @@ if (isset($_GET['export'])) {
                            COUNT(p.id) AS total_payments,
                            SUM(p.amount_paid) AS total_collected,
                            SUM(p.discount) AS total_discount,
-                           SUM(p.penalty) AS total_penalty
+                           SUM(p.penalty) AS total_penalty, SUM(p.amount_paid-COALESCE(p.discount,0)+COALESCE(p.penalty,0)) AS net_collected
                     FROM payments p
                     JOIN users u ON u.id = p.collector_id
                     WHERE p.deleted_at IS NULL";
@@ -65,7 +45,7 @@ if (isset($_GET['export'])) {
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
             $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $headers = ['Collector', 'Total Payments', 'Total Collected', 'Total Discount', 'Total Penalty'];
+            $headers = ['Collector', 'Total Payments', 'Total Collected', 'Total Discount', 'Total Penalty','Net Collected'];
             $filename = 'collections_export';
             break;
 
@@ -83,6 +63,8 @@ if (isset($_GET['export'])) {
             $filename = 'overdue_vendors_export';
             break;
     }
+
+    if ($format === 'xlsx' && $filename !== '') { require_once __DIR__.'/../includes/spreadsheet_export.php'; exportWorkbook($headers,array_map('array_values',$data),$filename); }
 
     if ($format === 'csv' && $filename !== '') {
         $filename .= '_' . date('Y-m-d') . '.csv';
@@ -272,9 +254,9 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
       <h3>Payment History</h3>
       <p>Export all payment records including vendor name, amount, date, and collector info.</p>
       <div class="actions">
-        <a class="btn btn-csv btn-sm" onclick="doExport('payments','csv')">
+        <a class="btn btn-csv btn-sm" onclick="doExport('payments','xlsx')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-          CSV Download
+          Excel Download
         </a>
         <a class="btn btn-pdf btn-sm" onclick="doExport('payments','html_pdf')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.72 13.829a42.415 42.415 0 0110.56 0M6.34 18h11.32M17.66 18l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659"/></svg>
@@ -290,9 +272,9 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
       <h3>Vendor List</h3>
       <p>Export all registered vendors with stall numbers, contact info, and rental status.</p>
       <div class="actions">
-        <a class="btn btn-csv btn-sm" onclick="doExport('vendors','csv')">
+        <a class="btn btn-csv btn-sm" onclick="doExport('vendors','xlsx')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-          CSV Download
+          Excel Download
         </a>
         <a class="btn btn-pdf btn-sm" onclick="doExport('vendors','html_pdf')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.72 13.829a42.415 42.415 0 0110.56 0M6.34 18h11.32M17.66 18l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659"/></svg>
@@ -308,9 +290,9 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
       <h3>Collection Summary</h3>
       <p>Export collector performance data with total amounts and payment counts.</p>
       <div class="actions">
-        <a class="btn btn-csv btn-sm" onclick="doExport('collections','csv')">
+        <a class="btn btn-csv btn-sm" onclick="doExport('collections','xlsx')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-          CSV Download
+          Excel Download
         </a>
         <a class="btn btn-pdf btn-sm" onclick="doExport('collections','html_pdf')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.72 13.829a42.415 42.415 0 0110.56 0M6.34 18h11.32M17.66 18l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659"/></svg>
@@ -326,9 +308,9 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
       <h3>Overdue Vendors</h3>
       <p>Export a list of all vendors with overdue payments for follow-up.</p>
       <div class="actions">
-        <a class="btn btn-csv btn-sm" onclick="doExport('overdue','csv')">
+        <a class="btn btn-csv btn-sm" onclick="doExport('overdue','xlsx')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-          CSV Download
+          Excel Download
         </a>
         <a class="btn btn-pdf btn-sm" onclick="doExport('overdue','html_pdf')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.72 13.829a42.415 42.415 0 0110.56 0M6.34 18h11.32M17.66 18l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659"/></svg>

@@ -1,78 +1,41 @@
 <?php
 require_once '../config/database.php';
-if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-require '../vendor/autoload.php';
-
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header("Location: login.php?role=admin");
-    exit;
+require_once '../includes/security.php';
+require_once '../includes/login_security.php';
+require_once '../includes/mailer.php';
+ob_start('secureHtml');
+$q=$pdo->prepare("SELECT id,email,first_name,status,role,deleted_at,auth_version,two_factor_enabled,otp_code,otp_expires FROM users WHERE id=?");
+$q->execute([$_SESSION['user_id']??0]); $user=$q->fetch(PDO::FETCH_ASSOC);
+if (!$user || $user['role']!=='admin' || $user['status']!=='active' || $user['deleted_at'] || (int)$user['auth_version']!==(int)($_SESSION['auth_version']??1)) {
+    header('Location: login.php?role=admin'); exit;
 }
-
-$error       = "";
-$info        = "";
-$otp_success = false;
-
-function sendOTP($userId, $pdo) {
-    $otp     = rand(100000, 999999);
-    $expires = date('Y-m-d H:i:s', strtotime('+5 minutes'));
-
-    $stmt = $pdo->prepare("UPDATE users SET otp_code=?, otp_expires=? WHERE id=?");
-    $stmt->execute([$otp, $expires, $userId]);
-
-    $mail = new PHPMailer(true);
-    try {
-        $mail->isSMTP();
-        $mail->Host       = 'smtp.gmail.com';
-        $mail->SMTPAuth   = true;
-        $mail->Username   = 'eutech253@gmail.com';
-        $mail->Password   = 'xcqyzxgaxvhrcbqy';
-        $mail->SMTPSecure = 'tls';
-        $mail->Port       = 587;
-        $mail->setFrom('eutech253@gmail.com', 'RPMS Admin');
-        $mail->addAddress('rpmsa00@gmail.com');
-        $mail->isHTML(false);
-        $mail->Subject = 'Your RPMS Admin OTP';
-        $mail->Body    = "Your OTP code is: $otp. It expires in 5 minutes.";
-        $mail->send();
-        return "success";
-    } catch (Exception $e) {
-        return "error:" . $mail->ErrorInfo;
-    }
+if (!$user['two_factor_enabled'] || !empty($_SESSION['otp_verified'])) {
+    $_SESSION['otp_verified']=true; header('Location: ../admin/dashboard.php'); exit;
 }
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['resend'])) {
-        $result = sendOTP($_SESSION['user_id'], $pdo);
-        $info   = $result === 'success' ? 'A new OTP has been sent to your email.' : 'Failed to send OTP. Please try again.';
-    } else {
-        $inputOtp = trim($_POST['otp'] ?? '');
-        $stmt = $pdo->prepare("SELECT otp_code, otp_expires FROM users WHERE id=? LIMIT 1");
-        $stmt->execute([$_SESSION['user_id']]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($user) {
-            if (new DateTime() > new DateTime($user['otp_expires'])) {
-                $error  = "OTP expired. A new code has been sent to your email.";
-                sendOTP($_SESSION['user_id'], $pdo);
-            } elseif ($inputOtp === (string)$user['otp_code']) {
-                $_SESSION['otp_verified'] = true;
-                $otp_success = true;
-            } else {
-                $error = "Invalid OTP. Please check your email and try again.";
-            }
+$error=''; $info=''; $otp_success=false;
+$attemptKeys=[hash('sha256','otp:'.$user['id'])];
+if ($_SERVER['REQUEST_METHOD']==='POST') {
+    verifyCsrf();
+    $wait=loginCooldown($pdo,$attemptKeys);
+    if ($wait>0) $error="Too many attempts. Try again in $wait seconds.";
+    elseif(isset($_POST['resend'])) {
+        if(time()-(int)($_SESSION['otp_sent_at']??0)<60) $error='Wait one minute before requesting another code.';
+        else {
+            $otp=(string)random_int(100000,999999);
+            $pdo->prepare('UPDATE users SET otp_code=?,otp_expires=DATE_ADD(NOW(),INTERVAL 5 MINUTE) WHERE id=?')->execute([$otp,$user['id']]);
+            $_SESSION['otp_sent_at']=time();
+            $sent=sendRpmsMail($user['email'],$user['first_name']??'Admin','Your RPMS Admin OTP','<p>Your verification code is <strong>'.$otp.'</strong>. It expires in five minutes.</p>');
+            $info=$sent['success']?'A new OTP has been sent to your email.':'The verification email could not be delivered. Please try again or contact support.';
         }
-    }
-} else {
-    $stmt = $pdo->prepare("SELECT otp_code, otp_expires FROM users WHERE id=? LIMIT 1");
-    $stmt->execute([$_SESSION['user_id']]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (empty($user['otp_code']) || new DateTime() > new DateTime($user['otp_expires'])) {
-        sendOTP($_SESSION['user_id'], $pdo);
-        $info = "An OTP has been sent to the admin email.";
+    } else {
+        $input=trim((string)($_POST['otp']??''));
+        if(empty($user['otp_code']) || empty($user['otp_expires']) || strtotime($user['otp_expires'])<=time()) $error='The code has expired. Request a new code.';
+        elseif(preg_match('/^[0-9]{6}$/D',$input) && hash_equals((string)$user['otp_code'],$input)) {
+            $pdo->prepare('UPDATE users SET otp_code=NULL,otp_expires=NULL WHERE id=?')->execute([$user['id']]);
+            $pdo->prepare('DELETE FROM login_attempts WHERE attempt_key=?')->execute([$attemptKeys[0]]);
+            session_regenerate_id(true); $_SESSION['otp_verified']=true;
+            header('Location: ../admin/dashboard.php'); exit;
+        } else { recordLoginFailure($pdo,$attemptKeys); $error='Invalid verification code.'; }
     }
 }
 ?>

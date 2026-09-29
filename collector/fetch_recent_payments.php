@@ -18,7 +18,7 @@ $paymentsStmt = $pdo->prepare("
     SELECT p.*, v.vendor_name, v.stall_number
     FROM payments p
     LEFT JOIN vendors v ON v.id = p.vendor_id
-    WHERE p.collector_id = :collector_id
+    WHERE p.deleted_at IS NULL AND p.status='paid' AND p.collector_id = :collector_id
       AND DATE(p.paid_at) BETWEEN :from AND :to
     ORDER BY p.paid_at DESC
     LIMIT :limit

@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action']??'')==='remove_acti
 ========================= */
 try {
     $total_vendors    = (int)$pdo->query("SELECT COUNT(*) FROM vendors WHERE deleted_at IS NULL")->fetchColumn();
-    $total_sections   = (int)$pdo->query("SELECT COUNT(*) FROM sections")->fetchColumn();
+    $total_sections   = (int)$pdo->query("SELECT COUNT(*) FROM sections WHERE deleted_at IS NULL")->fetchColumn();
     $total_collectors = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role='collector' AND deleted_at IS NULL")->fetchColumn();
     $total_collection = (float)$pdo
         ->query("SELECT COALESCE(SUM(amount_paid - COALESCE(discount,0) + COALESCE(penalty,0)),0) FROM payments WHERE deleted_at IS NULL AND status='paid'")
@@ -31,7 +31,7 @@ try {
     $monthlyData = $pdo->query("
         SELECT DATE_FORMAT(paid_at,'%b') AS month,
                SUM(amount_paid - COALESCE(discount,0) + COALESCE(penalty,0)) AS total
-        FROM payments WHERE deleted_at IS NULL AND status='paid'
+        FROM payments WHERE deleted_at IS NULL AND status='paid' AND YEAR(paid_at)=YEAR(CURDATE())
         GROUP BY MONTH(paid_at)
         ORDER BY MONTH(paid_at)
     ")->fetchAll(PDO::FETCH_ASSOC);
@@ -81,6 +81,7 @@ try {
         SELECT CONCAT(u.first_name,' ',u.last_name)
         FROM payments p
         JOIN users u ON u.id = p.collector_id
+        WHERE p.deleted_at IS NULL AND p.status='paid'
         GROUP BY p.collector_id
         ORDER BY SUM(amount_paid - COALESCE(discount,0) + COALESCE(penalty,0)) DESC
         LIMIT 1
@@ -98,7 +99,7 @@ try {
             SUM(CASE WHEN balance<=0 THEN 1 ELSE 0 END) AS paid,
             SUM(CASE WHEN balance>0 AND (next_due_date IS NULL OR next_due_date>=CURDATE()) THEN 1 ELSE 0 END) AS pending,
             SUM(CASE WHEN balance>0 AND next_due_date<CURDATE() THEN 1 ELSE 0 END) AS overdue
-        FROM vendors
+        FROM vendors WHERE deleted_at IS NULL
     ")->fetch(PDO::FETCH_ASSOC);
     $vendorStatusCounts = array_values($vendorStatusCounts);
 
@@ -114,7 +115,7 @@ try {
     ")->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    die("Database error: " . $e->getMessage());
+    http_response_code(503); exit('Dashboard data is temporarily unavailable.');
 }
 
 $annualTarget       = 2000000;
@@ -140,7 +141,7 @@ $collectionProgress = $annualTarget > 0 ? min(100, round(($total_collection / $a
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --brand:       #ea580c;
+  --brand:       #F57C00;
   --brand-dark:  #b3260c;
   --brand-light: #ffe4d1;
   --brand-glow:  rgba(234,88,12,.15);
@@ -535,7 +536,7 @@ body {
             <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
           </button>
           <div class="kpi-dropdown">
-            <a href="collectors.php"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>View Collectors</a>
+            <a href="collector_approvals.php?role=collector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>View Collectors</a>
             <a href="#" onclick="refreshKPI('collectors',this);return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>Refresh</a>
           </div>
         </div>
@@ -599,7 +600,7 @@ body {
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;width:100%;">
           <div style="display:flex;justify-content:space-between;font-size:.8rem;">
-            <span style="display:flex;align-items:center;gap:6px;color:var(--ink-2)"><span style="width:10px;height:10px;border-radius:50%;background:#ea580c;display:inline-block"></span>Paid</span>
+            <span style="display:flex;align-items:center;gap:6px;color:var(--ink-2)"><span style="width:10px;height:10px;border-radius:50%;background:#F57C00;display:inline-block"></span>Paid</span>
             <strong><?= $vendorStatusCounts[0] ?></strong>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:.8rem;">
@@ -785,6 +786,7 @@ body {
 <script>
 /* ---- Date Range Filter ---- */
 let monthlyChartInstance, collectorChartInstance;
+function escapeCell(value) { const node=document.createElement('span'); node.textContent=String(value ?? ''); return node.innerHTML; }
 
 function applyDateFilter() {
   const from = document.getElementById('dashDateFrom').value;
@@ -818,9 +820,9 @@ function applyDateFilter() {
         tbody.innerHTML = d.recent_payments.map(p => `
           <tr>
             <td>${new Date(p.payment_date).toLocaleDateString('en-PH', {month:'short',day:'numeric',year:'numeric'})}</td>
-            <td>${p.vendor}</td>
+            <td><a href="print_receipt.php?id=${Number(p.id)}">${escapeCell(p.vendor)}</a></td>
             <td><strong>₱${parseFloat(p.amount_paid).toLocaleString('en-PH',{minimumFractionDigits:2})}</strong></td>
-            <td><span class="status-pill status-${p.status.toLowerCase()}">${p.status.charAt(0).toUpperCase()+p.status.slice(1)}</span></td>
+            <td><span class="status-pill status-${['paid','pending','cancelled'].includes(p.status) ? p.status : 'pending'}">${escapeCell(p.status)}</span></td>
           </tr>
         `).join('');
       }
@@ -881,12 +883,12 @@ monthlyChartInstance = new Chart(document.getElementById('monthlyChart'), {
       label: 'Collection (₱)',
       data:  <?= json_encode(array_column($monthlyData, 'total')) ?>,
       backgroundColor: 'rgba(234,88,12,.08)',
-      borderColor: '#ea580c',
+      borderColor: '#F57C00',
       borderWidth: 2.5,
       fill: true,
       tension: 0.4,
       pointRadius: 4,
-      pointBackgroundColor: '#ea580c',
+      pointBackgroundColor: '#F57C00',
       pointBorderColor: '#fff',
       pointBorderWidth: 2,
     }]
@@ -912,7 +914,7 @@ new Chart(document.getElementById('vendorStatusChart'), {
     labels: ['Paid', 'Pending', 'Overdue'],
     datasets: [{
       data: <?= json_encode($vendorStatusCounts) ?>,
-      backgroundColor: ['#ea580c', '#f59e0b', '#fb7185'],
+      backgroundColor: ['#F57C00', '#f59e0b', '#fb7185'],
       borderWidth: 0,
       hoverOffset: 6,
     }]
@@ -939,7 +941,7 @@ collectorChartInstance = new Chart(document.getElementById('collectorChart'), {
       backgroundColor: 'rgba(234,88,12,.75)',
       borderRadius: 6,
       borderSkipped: false,
-      hoverBackgroundColor: '#ea580c',
+      hoverBackgroundColor: '#F57C00',
     }]
   },
   options: {

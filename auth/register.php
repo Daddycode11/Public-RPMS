@@ -1,6 +1,6 @@
 <?php
 require_once '../config/database.php';
-if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+require_once __DIR__.'/../includes/security.php';
 require_once '../includes/security.php';
 require_once '../includes/documents.php';
 ob_start('secureHtml');

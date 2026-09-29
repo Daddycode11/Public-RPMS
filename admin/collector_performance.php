@@ -49,7 +49,7 @@ $topCollector = !empty($data) ? $data[0]['name'] : '—';
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --brand:       #ea580c;
+  --brand:       #F57C00;
   --brand-dark:  #b3260c;
   --brand-light: #ffe4d1;
   --brand-glow:  rgba(234,88,12,.12);
@@ -262,7 +262,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
 <script>
 const names = <?= json_encode(array_column($data, 'name')) ?>;
 const amounts = <?= json_encode(array_map('floatval', array_column($data, 'net_collected'))) ?>;
-const colors = ['#ea580c','#b3260c','#f97316','#fb923c','#fdba74','#fed7aa','#ffe4d1','#c2410c','#9a3412','#7c2d12'];
+const colors = ['#F57C00','#b3260c','#f97316','#fb923c','#fdba74','#fed7aa','#ffe4d1','#c2410c','#9a3412','#7c2d12'];
 
 // Bar Chart
 new Chart(document.getElementById('barChart'), {
